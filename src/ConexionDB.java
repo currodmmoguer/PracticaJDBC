@@ -20,8 +20,13 @@ public class ConexionDB {
 		return conexion;
 	}
 	
-	public static Connection getConection() throws SQLException {
+	public static Connection getConnection() throws SQLException {
 		return conexion;
+	}
+	
+	public static void cerrarConexion() throws SQLException {
+		if (conexion!=null)
+			conexion.close();
 	}
 
 }
