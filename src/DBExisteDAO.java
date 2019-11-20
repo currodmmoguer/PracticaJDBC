@@ -69,7 +69,7 @@ public class DBExisteDAO {
 			sb.delete(sb.length()-1, sb.length());
 			sb.append(");");
 			System.out.println(sb.toString());
-//			DBNuevaDAO.addSentencia(sb.toString());
+			DBNuevaDAO.addSentencia(sb.toString());
 		}
 
 	}
@@ -92,11 +92,7 @@ public class DBExisteDAO {
 	        	String sentencia = "ALTER TABLE " + tableName + " ADD PRIMARY KEY(" + primeryKeys.getString("COLUMN_NAME") + ")";
 	        	System.out.println(sentencia);
 	        }
-	        
-
 		}
-		
-		
 	}
 	
 
@@ -119,13 +115,10 @@ public class DBExisteDAO {
 	 	       String pkColumnName = foreingKeys.getString("PKCOLUMN_NAME");
 	 	       String pkTableName = foreingKeys.getString("PKTABLE_NAME");
 	 	       
-	 	       String sentencia = "ALTER TABLE " + tableName + " ADD FOREING KEY (" + fkColumnName + ") REFERENCES " + pkTableName + "("+ pkColumnName +")";
+	 	       String sentencia = "ALTER TABLE " + tableName + " ADD FOREIGN KEY (" + fkColumnName + ") REFERENCES " + pkTableName + "("+ pkColumnName +")";
 	 	       System.out.println(sentencia);
 	        }
-	        
-
 		}
-		 
 	}
 	
 
