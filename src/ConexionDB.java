@@ -19,5 +19,9 @@ public class ConexionDB {
 		
 		return conexion;
 	}
+	
+	public static Connection getConection() throws SQLException {
+		return conexion;
+	}
 
 }

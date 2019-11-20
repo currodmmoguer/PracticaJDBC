@@ -2,6 +2,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 public class DBExisteDAO {
 	private static final String URL = "jdbc:sqlite:";
@@ -24,7 +25,9 @@ public class DBExisteDAO {
 	public static void consultarMetaData(DatabaseMetaData dbmd) throws SQLException {
 		StringBuilder sb = new StringBuilder();
 		String[] tipos = {"TABLE"};
-		ResultSet resul = resul = dbmd.getTables("LIBROS", "PUBLIC", null, tipos);
+
+		ResultSet resul = dbmd.getTables("main", "PUBLIC", null, tipos);
+
 		ResultSet columnas = null;
 
 		//Bucle por tablas
@@ -54,5 +57,5 @@ public class DBExisteDAO {
 
 
 
-	}
+}
 
