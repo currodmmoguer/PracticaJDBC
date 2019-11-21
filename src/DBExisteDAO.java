@@ -30,7 +30,7 @@ public class DBExisteDAO {
 		StringBuilder sb = new StringBuilder();
 		String[] tipos = {"TABLE"};
 
-		ResultSet resul = dbmd.getTables("main", "PUBLIC", null, tipos);
+		ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
 
 		ResultSet columnas = null;
 
@@ -41,10 +41,11 @@ public class DBExisteDAO {
 
 			String tabla = resul.getString("TABLE_NAME");
 			
+			//si empoeza por sqlite no haga el while
 			sb.append("create table " + tabla + "(");
 			
 			
-			columnas = dbmd.getColumns("LIBROS", "PUBLIC", tabla, null);
+			columnas = dbmd.getColumns(null, "PUBLIC", tabla, null);
 			while (columnas.next()) {
 				
 				String nombreCol = columnas.getString("COLUMN_NAME");
@@ -55,10 +56,10 @@ public class DBExisteDAO {
 				
 				if (nula.equals("N"))
 					nulo = " NOT NULL";
-//				String numero = tipoCol.substring(tipoCol.indexOf("("), tipoCol.indexOf(")"));
-				if (tipoCol.matches("^NVARCHAR")) {
-//					String numero = tipoCol.substring(tipoCol.indexOf("("), tipoCol.indexOf(")"));
-					nombreCol = "VARCHAR(";
+
+				if (tipoCol.startsWith("NVARCHAR")) {
+					String numero = tipoCol.substring(tipoCol.indexOf("("), tipoCol.indexOf(")"));
+					tipoCol = "VARCHAR" + numero + ")";
 				}
 
 
@@ -69,7 +70,7 @@ public class DBExisteDAO {
 			sb.delete(sb.length()-1, sb.length());
 			sb.append(");");
 			System.out.println(sb.toString());
-			DBNuevaDAO.addSentencia(sb.toString());
+//			DBNuevaDAO.addSentencia(sb.toString());
 		}
 
 	}
@@ -102,6 +103,9 @@ public class DBExisteDAO {
 	 * @throws SQLException
 	 */
 	public static void consultarClavesAjenas(DatabaseMetaData dbmd) throws SQLException {
+		String[] rol = {"CASCADE", "RESTRICT", "SET NULL", "NO ACTION", "SET DEFAULT"};
+		
+
 		String[] tipos = {"TABLE"};
 		ResultSet tables = dbmd.getTables("main", "PUBLIC", null, tipos);
 		ResultSet foreingKeys;
@@ -114,7 +118,9 @@ public class DBExisteDAO {
 	 	       String fkColumnName = foreingKeys.getString("FKCOLUMN_NAME");
 	 	       String pkColumnName = foreingKeys.getString("PKCOLUMN_NAME");
 	 	       String pkTableName = foreingKeys.getString("PKTABLE_NAME");
-	 	       
+	 	       Short update = foreingKeys.getShort("UPDATE_RULE");
+	 	       Short delete = foreingKeys.getShort("DELETE_RULE");
+	 	       System.out.println(update + " | " + delete);
 	 	       String sentencia = "ALTER TABLE " + tableName + " ADD FOREIGN KEY (" + fkColumnName + ") REFERENCES " + pkTableName + "("+ pkColumnName +")";
 	 	       System.out.println(sentencia);
 	        }

@@ -18,6 +18,7 @@ public class ConexionDBNueva {
 		   conexion = DriverManager.getConnection(DB_URL, USER, PASS);
 		   Statement sentencia = conexion.createStatement();
 		   sentencia.executeUpdate("CREATE DATABASE " + nombre);
+		   sentencia.executeUpdate("USE " + nombre);
 	   }
 	   
 	   public static Connection getConnection() throws SQLException {

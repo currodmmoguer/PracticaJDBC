@@ -45,7 +45,7 @@ public class Principal {
 
 	private static void consultarMetaData(String url) {
 		try {
-			ConexionDBNueva.crearConexion("chino");
+//		ConexionDBNueva.crearConexion("chino");
 		DatabaseMetaData dbmd = ConexionDB.getConection(url).getMetaData();
 		DBExisteDAO.consultarMetaData(dbmd);
 		System.out.println("-----------------------");
