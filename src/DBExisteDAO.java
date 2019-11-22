@@ -13,6 +13,7 @@ public class DBExisteDAO {
 
 	/**
 	 * Devuelve el objeto DAO. Si si ya existe devuelve el existente
+	 * 
 	 * @param archivo
 	 * @return DAO objeto
 	 * @throws SQLException
@@ -26,77 +27,51 @@ public class DBExisteDAO {
 	}
 
 	/**
-	 * Consulta
+	 * Obtiene todos los metadatos de la BD y lo ejecuta en la otra base de datos
 	 * 
 	 * @param dbmd
 	 * @throws SQLException
 	 */
 	public static void migrar(DatabaseMetaData dbmd) throws SQLException {
-		//Setautocommit(false) no funciona
+		// Setautocommit(false) no funciona
 		String strSentencia;
 		String tabla;
 		String[] tipos = { "TABLE" };
 		ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
-		ConexionDBNueva.getConnection().setAutoCommit(false);
+
 		// Bucle por tablas
 		while (resul.next()) {
 			tabla = resul.getString("TABLE_NAME");
 			// Se compruena que no sea una tabla propia de sqlite
 			if (!tabla.startsWith("sqlite")) {
-				strSentencia = crearSentencia(dbmd, tabla);
+				strSentencia = sentenciaTabla(dbmd, tabla);
 				System.out.println(strSentencia);
 				DBNuevaDAO.addSentencia(strSentencia);
-				consultarClavesPrimarias(dbmd, tabla);
+				migrarClavesPrimarias(dbmd, tabla);
 			}
 		}
-		
-		consultarClavesAjenas(dbmd);
-		ConexionDBNueva.getConnection().commit();
-		
+
+		resul.close();
+		migrarClavesAjenas(dbmd);
+
 	}
 
 	/**
-	 * Crea la sentencia SQL para crear tabla obtenidos de los metadatos de la BD indicada
-	 * @param dbmd Databasemetadata - metadatos de una base de datos
-	 * @param nombre String - nombre de la tabla a crear
+	 * Consulta las claves primarias y prepara la sentencia en MySQL
+	 * 
+	 * @param dbmd
+	 * @param tableName nombre de la tabla que consulta
 	 * @throws SQLException
 	 */
-	private static String crearSentencia(DatabaseMetaData dbmd, String tabla) throws SQLException {
-		ResultSet columnas;
-		StringBuilder sb = new StringBuilder();
-
-		sb.append("create table " + tabla + "(");
-		columnas = dbmd.getColumns(null, "PUBLIC", tabla, null);
-
-		while (columnas.next()) {
-			String nombreCol = columnas.getString("COLUMN_NAME");
-			String tipoCol = columnas.getString("TYPE_NAME");
-			String nula = columnas.getString("IS_NULLABLE");
-			// String autoin = columnas.getString("IS_AUTOINCREMENT");
-			String nulo = "";
-
-			if (nula.equals("N"))
-				nulo = " NOT NULL";
-
-			tipoCol = comprobarTipoColumna(tipoCol);
-			// Comprobar autoin
-
-			sb.append(nombreCol + " " + tipoCol + nulo + ",");
-		}
-		sb.delete(sb.length() - 1, sb.length());
-		sb.append(");");
-
-		return sb.toString();
-
-	}
-
-	private static void consultarClavesPrimarias(DatabaseMetaData dbmd, String tableName) throws SQLException {
+	private static void migrarClavesPrimarias(DatabaseMetaData dbmd, String tableName) throws SQLException {
 		ArrayList<String> claves = new ArrayList<String>();
 		ResultSet primeryKeys = dbmd.getPrimaryKeys(null, null, tableName);
 
 		while (primeryKeys.next()) {
 			claves.add(primeryKeys.getString("COLUMN_NAME"));
 		}
+
+		primeryKeys.close();
 
 		if (claves.size() > 0) {
 			sentenciaClavePrimaria(claves, tableName);
@@ -105,6 +80,137 @@ public class DBExisteDAO {
 
 	}
 
+	/**
+	 * Método que lee todas las claves ajenas de una base de datos y la ejecuta en
+	 * la otra
+	 * 
+	 * @param dbmd Metadatos
+	 * @throws SQLException
+	 */
+	private static void migrarClavesAjenas(DatabaseMetaData dbmd) throws SQLException {
+
+		Short update = -1, delete = -1; // Se inicializa a -1 para la condición de más abajo (si es -1 es que no tiene
+		String[] tipos = { "TABLE" };
+		ResultSet tables = dbmd.getTables("main", "PUBLIC", null, tipos);
+		ResultSet foreingKeys;
+
+		String fkColumnName, pkColumnName, pkTableName;
+		while (tables.next()) {
+			String tableName = tables.getString("TABLE_NAME");
+			foreingKeys = dbmd.getImportedKeys(null, null, tableName);
+
+			while (foreingKeys.next()) {
+				fkColumnName = foreingKeys.getString("FKCOLUMN_NAME");
+				pkColumnName = foreingKeys.getString("PKCOLUMN_NAME");
+				pkTableName = foreingKeys.getString("PKTABLE_NAME");
+				update = foreingKeys.getShort("UPDATE_RULE");
+				delete = foreingKeys.getShort("DELETE_RULE");
+				// Comprobar constrain DEFERRABILITY
+				// System.out.println(foreingKeys.getShort("DEFERRABILITY"));
+
+				DBNuevaDAO.addSentencia(
+						sentenciaClaveAjena(update, delete, fkColumnName, pkColumnName, pkTableName, tableName));
+
+			}
+			foreingKeys.close();
+		}
+		tables.close();
+	}
+
+	/**
+	 * Crea la sentencia SQL para crear tabla obtenidos de los metadatos de la BD
+	 * indicada
+	 * 
+	 * @param dbmd   Databasemetadata - metadatos de una base de datos
+	 * @param nombre String - nombre de la tabla a crear
+	 * @throws SQLException
+	 */
+	private static String sentenciaTabla(DatabaseMetaData dbmd, String tabla) throws SQLException {
+		ResultSet columnas = dbmd.getColumns(null, "PUBLIC", tabla, null);
+		StringBuilder sb = new StringBuilder("create table " + tabla + "(");
+		String nombreCol, tipoCol, nula;
+
+		while (columnas.next()) {
+			nombreCol = columnas.getString("COLUMN_NAME");
+			tipoCol = comprobarTipoColumna(columnas.getString("TYPE_NAME"));
+			nula = isNullable(columnas.getString("IS_NULLABLE"));
+			// String autoin = columnas.getString("IS_AUTOINCREMENT");
+
+			sb.append(nombreCol + " " + tipoCol + nula + ",");
+		}
+
+		sb.delete(sb.length() - 1, sb.length());
+		sb.append(");");
+		columnas.close();
+
+		return sb.toString();
+	}
+
+	/**
+	 * Crea la sentencia para la clave primaria y la ejecuta en la otra BD
+	 * 
+	 * @param claves
+	 * @param tableName
+	 * @throws SQLException
+	 */
+	private static void sentenciaClavePrimaria(ArrayList<String> claves, String tableName) throws SQLException {
+		StringBuilder sbSentencia = new StringBuilder();
+
+		if (claves.size() == 1) {
+			sbSentencia.append("ALTER TABLE " + tableName + " ADD PRIMARY KEY(" + claves.get(0) + ")");
+		} else {
+			sbSentencia.append("ALTER TABLE " + tableName + " ADD PRIMARY KEY(" + claves.get(0));
+
+			for (int i = 1; i < claves.size(); i++) {
+				sbSentencia.append(", " + claves.get(i));
+			}
+
+			sbSentencia.append(")");
+		}
+
+		System.out.println(sbSentencia);
+		DBNuevaDAO.addSentencia(sbSentencia.toString());
+	}
+
+	/**
+	 * Crea la sentencia SQL para añadir las claves ajenas
+	 * 
+	 * @param update       Acción aplicada a la clave externa (actualización)
+	 * @param delete       Acción aplicada a la clave externa (eliminación)
+	 * @param fkColumnName Nombre de clave externa
+	 * @param pkColumnName Nombre de clave principal que hace referencia
+	 * @param pkTableName  Nombre tabla de clave principal
+	 * @param tableName    Nombre de la tabla
+	 * @return sentencia SQL
+	 * @throws SQLException
+	 */
+	private static String sentenciaClaveAjena(Short update, Short delete, String fkColumnName, String pkColumnName,
+			String pkTableName, String tableName) throws SQLException {
+
+		String[] rol = { "CASCADE", "RESTRICT", "SET NULL", "NO ACTION", "SET DEFAULT" };
+		StringBuilder sentencia = new StringBuilder();
+
+		sentencia.append("ALTER TABLE " + tableName + " ADD FOREIGN KEY (" + fkColumnName + ") REFERENCES "
+				+ pkTableName + "(" + pkColumnName + ")");
+
+		if (delete != -1)
+			sentencia.append(" ON DELETE " + rol[delete]);
+
+		if (update != -1)
+			sentencia.append(" ON UPDATE " + rol[update]);
+
+		System.out.println(sentencia);
+		DBNuevaDAO.addSentencia(sentencia.toString());
+
+		return sentencia.toString();
+	}
+
+	/**
+	 * Comprueba tipos de datos y realiza la conversión a su equivalencia en MySQL
+	 * 
+	 * @param tipoCol tipo de dato en Sqlite
+	 * @return tipo de dato en MySQL
+	 */
 	private static String comprobarTipoColumna(String tipoCol) {
 		String numero, nombre = tipoCol;
 		if (tipoCol.toUpperCase().startsWith("NVARCHAR") || tipoCol.startsWith("VARACHAR")
@@ -121,67 +227,22 @@ public class DBExisteDAO {
 		return nombre;
 	}
 
-
-	private static void sentenciaClavePrimaria(ArrayList<String> claves, String tableName) throws SQLException {
-		StringBuilder sentencia = new StringBuilder();
-
-		if (claves.size() == 1) {
-			sentencia.append("ALTER TABLE " + tableName + " ADD PRIMARY KEY(" + claves.get(0) + ")");
-		} else {
-			sentencia.append("ALTER TABLE " + tableName + " ADD PRIMARY KEY(" + claves.get(0));
-
-			for (int i = 1; i < claves.size(); i++) {
-				sentencia.append(", " + claves.get(i));
-			}
-
-			sentencia.append(")");
-		}
-
-		System.out.println(sentencia);
-		DBNuevaDAO.addSentencia(sentencia.toString());
-
-	}
-
 	/**
-	 * Método que lee todas las claves ajenas de una base de datos
+	 * Realiza la conversión sobre lo que devuelve "IS_NULLABE" a una sentencia SQL
 	 * 
-	 * @param dbmd Metadatos
-	 * @throws SQLException
+	 * @param str Y | N, solo hace algo si es N
+	 * @return si no permite nulo -> NOT NULL, si lo permite devuelve un string
+	 *         vacío
 	 */
-	private static void consultarClavesAjenas(DatabaseMetaData dbmd) throws SQLException {
-		String[] rol = { "CASCADE", "RESTRICT", "SET NULL", "NO ACTION", "SET DEFAULT" };
-		Short update = -1, delete = -1;
-		String[] tipos = { "TABLE" };
-		ResultSet tables = dbmd.getTables("main", "PUBLIC", null, tipos);
-		ResultSet foreingKeys;
-		StringBuilder sentencia = new StringBuilder();
+	private static String isNullable(String str) {
+		String nulo;
 
-		while (tables.next()) {
-			String tableName = tables.getString("TABLE_NAME");
-			foreingKeys = dbmd.getImportedKeys(null, null, tableName);
+		if (str.equals("N"))
+			nulo = " NOT NULL";
+		else
+			nulo = "";
 
-			while (foreingKeys.next()) {
-				String fkColumnName = foreingKeys.getString("FKCOLUMN_NAME");
-				String pkColumnName = foreingKeys.getString("PKCOLUMN_NAME");
-				String pkTableName = foreingKeys.getString("PKTABLE_NAME");
-				update = foreingKeys.getShort("UPDATE_RULE");
-				delete = foreingKeys.getShort("DELETE_RULE");
-				// Comprobar constrain DEFERRABILITY
-				sentencia.append("ALTER TABLE " + tableName + " ADD FOREIGN KEY (" + fkColumnName + ") REFERENCES "
-						+ pkTableName + "(" + pkColumnName + ")");
-
-				if (delete != -1)
-					sentencia.append(" ON DELETE " + rol[delete]);
-
-				if (update != -1)
-					sentencia.append(" ON UPDATE " + rol[update]);
-
-				System.out.println(sentencia);
-				DBNuevaDAO.addSentencia(sentencia.toString());
-				sentencia.delete(0, sentencia.length());
-
-			}
-		}
+		return nulo;
 	}
 
 }

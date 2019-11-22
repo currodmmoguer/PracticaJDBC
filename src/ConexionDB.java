@@ -31,9 +31,14 @@ public class ConexionDB {
 	 * Cierra la conexion de la base de datos
 	 * @throws SQLException
 	 */
-	public static void cerrarConexion() throws SQLException {
+	public static void cerrarConexion() {
 		if (conexion!=null)
-			conexion.close();
+			try {
+				conexion.close();
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 	}
 
 }

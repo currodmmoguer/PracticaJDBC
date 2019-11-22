@@ -21,6 +21,7 @@ public class ConexionDBNueva {
 	    */
 	   private ConexionDBNueva(String nombre) throws SQLException {
 		   conexion = DriverManager.getConnection(DB_URL, USER, PASS);
+		   conexion.setAutoCommit(false);
 		   Statement sentencia = conexion.createStatement();
 		   sentencia.executeUpdate("CREATE DATABASE " + nombre);
 		   sentencia.executeUpdate("USE " + nombre);
@@ -48,9 +49,24 @@ public class ConexionDBNueva {
 	    * Cierra la conexion
 	    * @throws SQLException
 	    */
-	   public static void cerrarConexion() throws SQLException {
+	   public static void cerrarConexion() {
 		   if (conexion!=null)
-			   conexion.close();
+			try {
+				conexion.close();
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 	   }
+	   
+	   public static void realizarRollBack() {
+			if (conexion != null) {
+				try {
+					conexion.rollback();
+				} catch (SQLException e1) {
+					System.out.println("ERROR AL REALIZAR EL ROLLBACK");
+				}
+			}
+		}
 
 }

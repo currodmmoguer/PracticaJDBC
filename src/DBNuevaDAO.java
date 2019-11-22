@@ -19,6 +19,11 @@ public class DBNuevaDAO {
 		return dao;
 	}
 	
+	/**
+	 * Ejecuta una sentencia en la base de datos
+	 * @param sentencia SQL
+	 * @throws SQLException
+	 */
 	public static void addSentencia(String sentencia) throws SQLException {
 		Statement sent = ConexionDBNueva.getConnection().createStatement();
 		sent.executeUpdate(sentencia);
