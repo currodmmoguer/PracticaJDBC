@@ -23,18 +23,17 @@ public class Principal {
 //			nombreFicheroExiste = teclado.nextLine();
 //			System.out.print("Introduce el nombre de la base de datos nueva: ");
 //			nombreDBNueva = teclado.nextLine();
-			
 //			ConexionDBNueva.crearConexion("chino");
+			
+			
+			
 			String url = "chinook.db";
 			consultarMetaData(url);
-			ConexionDB.cerrarConexion();
+
 		} catch (ClassNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} 
+		}
 
 	}
 	
@@ -45,13 +44,14 @@ public class Principal {
 
 	private static void consultarMetaData(String url) {
 		try {
-//		ConexionDBNueva.crearConexion("chino");
+		ConexionDBNueva.crearConexion("nueva9");
 		DatabaseMetaData dbmd = ConexionDB.getConection(url).getMetaData();
-		DBExisteDAO.consultarMetaData(dbmd);
-		System.out.println("-----------------------");
-		DBExisteDAO.consultarClavesPrimarias(dbmd);
-		System.out.println("-----------------------");
-		DBExisteDAO.consultarClavesAjenas(dbmd);
+		DBExisteDAO.migrar(dbmd);
+		
+		
+		
+		ConexionDB.cerrarConexion();
+		ConexionDBNueva.cerrarConexion();
 		}catch (SQLException e) {
 			e.printStackTrace();
 		}

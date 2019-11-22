@@ -9,6 +9,7 @@ public class DBNuevaDAO {
 	
 	private DBNuevaDAO() throws SQLException {
 		conexion = ConexionDBNueva.getConnection();
+		conexion.setAutoCommit(false);
 	}
 	
 	public static DBNuevaDAO getDao() throws SQLException {
