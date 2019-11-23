@@ -3,14 +3,14 @@ import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-public class ConexionDB {
+public class ConexionDBExistente {
 	
 	private static final String URL = "jdbc:sqlite:";
 	private static Connection conexion;
 	private static String nombreDB;
 	
 	
-	private ConexionDB(String url) throws MigracionException{
+	private ConexionDBExistente(String url) throws MigracionException{
 		
 		try {
 			conexion = DriverManager.getConnection(url);
@@ -30,7 +30,7 @@ public class ConexionDB {
 	public static Connection getConection(String archivo) throws MigracionException{
 		String strUrl = URL + archivo;
 		if (!hayConexion()) 
-			new ConexionDB(strUrl);
+			new ConexionDBExistente(strUrl);
 		
 		return conexion;
 	}

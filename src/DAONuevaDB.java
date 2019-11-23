@@ -2,19 +2,19 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-public class DBNuevaDAO {
+public class DAONuevaDB {
 	
-	private static DBNuevaDAO dao;
+	private static DAONuevaDB dao;
 	private static Connection conexion;
 	
-	private DBNuevaDAO() throws SQLException {
+	private DAONuevaDB() throws SQLException {
 		conexion = ConexionDBNueva.getConnection();
 		conexion.setAutoCommit(false);
 	}
 	
-	public static DBNuevaDAO getDao() throws SQLException {
+	public static DAONuevaDB getDao() throws SQLException {
 		if (dao==null)
-			dao = new DBNuevaDAO();
+			dao = new DAONuevaDB();
 		
 		return dao;
 	}

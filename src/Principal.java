@@ -18,7 +18,7 @@ public class Principal {
 //			nombreDBNueva = teclado.nextLine();
 
 //			String url = "oracle-sample.db";
-			String url = "ciclistas";
+			String url = "prueba";
 			consultarMetaData(url);
 
 		} catch (ClassNotFoundException e) {
@@ -30,17 +30,18 @@ public class Principal {
 
 	private static void consultarMetaData(String url) {
 		try {
-			ConexionDB.getConection(url);	//Crea la conexion
-			ConexionDBNueva.crearConexion("nueva5");
-			DAOExistenteDB.migrar(ConexionDB.getMetadatos());
+			ConexionDBExistente.getConection(url);	//Crea la conexion
+			ConexionDBNueva.crearConexion("nueva6");
+			DAOExistenteDB.migrar(ConexionDBExistente.getMetadatos());
 			ConexionDBNueva.realizarCommit();
+			
 		} catch (MigracionException e) {
-			System.out.println(e.getMessage());
+			System.err.println(e.getMessage());
 			ConexionDBNueva.realizarRollBack();
 		} 
 
 		ConexionDBNueva.cerrarConexion();
-		ConexionDB.cerrarConexion();
+		ConexionDBExistente.cerrarConexion();
 
 	}
 

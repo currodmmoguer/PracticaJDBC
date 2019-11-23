@@ -30,32 +30,29 @@ public class DAOExistenteDB {
 	 * Obtiene todos los metadatos de la BD y lo ejecuta en la otra base de datos
 	 * 
 	 * @param dbmd
-	 * @throws MigracionException 
+	 * @throws MigracionException
 	 * @throws SQLException
 	 */
 	public static void migrar(DatabaseMetaData dbmd) throws MigracionException {
 		// Setautocommit(false) no funciona
-		String strSentencia;
 		String tabla;
 		String[] tipos = { "TABLE" };
-		
+
 		try {
-		ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
+			ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
 
-		// Bucle por tablas
-		while (resul.next()) {
-			tabla = resul.getString("TABLE_NAME");
-			// Se compruena que no sea una tabla propia de sqlite
-			if (!tabla.startsWith("sqlite")) {
-				strSentencia = sentenciaTabla(dbmd, tabla);
-				System.out.println(strSentencia);
-				DBNuevaDAO.addSentencia(strSentencia);
-				migrarClavesPrimarias(dbmd, tabla);
+			// Bucle por tablas (no migra las claves ajenas)
+			while (resul.next()) {
+				tabla = resul.getString("TABLE_NAME");
+				// Se compruena que no sea una tabla propia de sqlite
+				if (!tabla.startsWith("sqlite")) {
+					migrarTabla(dbmd, tabla);
+					migrarClavesPrimarias(dbmd, tabla);
+				}
 			}
-		}
 
-		resul.close();
-		migrarClavesAjenas(dbmd);
+			resul.close();
+			migrarClavesAjenas(dbmd);
 		} catch (SQLException e) {
 			throw new MigracionException("Error en la migración de la base de datos.");
 		}
@@ -63,25 +60,66 @@ public class DAOExistenteDB {
 	}
 
 	/**
+	 * Crea la sentencia SQL y la ejecuta para crear tabla obtenidos de los
+	 * metadatos de la BD indicada
+	 * 
+	 * @param dbmd   Databasemetadata - metadatos de una base de datos
+	 * @param nombre String - nombre de la tabla a crear
+	 * @throws MigracionException
+	 */
+	private static void migrarTabla(DatabaseMetaData dbmd, String tabla) throws MigracionException {
+		StringBuilder sbSentencia = new StringBuilder("create table " + tabla + "(");
+		String nombreCol, tipoCol, nula;
+
+		try {
+			ResultSet columnas = dbmd.getColumns(null, "PUBLIC", tabla, null);
+
+			while (columnas.next()) {
+				nombreCol = columnas.getString("COLUMN_NAME");
+				tipoCol = comprobarTipoColumna(columnas.getString("TYPE_NAME"));
+				nula = isNullable(columnas.getString("IS_NULLABLE"));
+				// String autoin = columnas.getString("IS_AUTOINCREMENT");
+
+				sbSentencia.append(nombreCol + " " + tipoCol + nula + ",");
+			}
+
+			sbSentencia.delete(sbSentencia.length() - 1, sbSentencia.length());
+			sbSentencia.append(");");
+			columnas.close();
+
+			System.out.println(sbSentencia.toString());
+			DAONuevaDB.addSentencia(sbSentencia.toString());
+		} catch (SQLException e) {
+			throw new MigracionException("Error en la migración de la base de datos con la tabla \"" + tabla + "\"");
+		}
+	}
+
+	/**
 	 * Consulta las claves primarias y prepara la sentencia en MySQL
 	 * 
 	 * @param dbmd
 	 * @param tableName nombre de la tabla que consulta
+	 * @throws MigracionException
 	 * @throws SQLException
 	 */
-	private static void migrarClavesPrimarias(DatabaseMetaData dbmd, String tableName) throws SQLException {
+	private static void migrarClavesPrimarias(DatabaseMetaData dbmd, String tableName) throws MigracionException {
 		ArrayList<String> claves = new ArrayList<String>();
-		ResultSet primeryKeys = dbmd.getPrimaryKeys(null, null, tableName);
 
-		while (primeryKeys.next()) {
-			claves.add(primeryKeys.getString("COLUMN_NAME"));
-		}
+		try {
+			ResultSet primeryKeys = dbmd.getPrimaryKeys(null, null, tableName);
 
-		primeryKeys.close();
+			while (primeryKeys.next()) {
+				claves.add(primeryKeys.getString("COLUMN_NAME"));
+			}
 
-		if (claves.size() > 0) {
-			sentenciaClavePrimaria(claves, tableName);
-			claves.clear();
+			primeryKeys.close();
+
+			if (claves.size() > 0) {
+				sentenciaClavePrimaria(claves, tableName);
+				claves.clear();
+			}
+		} catch (SQLException e) {
+			throw new MigracionException("Error al migrar la/s clave/s primaria/s de la tabla \"" + tableName + "\"");
 		}
 
 	}
@@ -91,68 +129,42 @@ public class DAOExistenteDB {
 	 * la otra
 	 * 
 	 * @param dbmd Metadatos
+	 * @throws MigracionException
 	 * @throws SQLException
 	 */
-	private static void migrarClavesAjenas(DatabaseMetaData dbmd) throws SQLException {
-
-		Short update = -1, delete = -1; // Se inicializa a -1 para la condición de más abajo (si es -1 es que no tiene
+	private static void migrarClavesAjenas(DatabaseMetaData dbmd) throws MigracionException {
 		String[] tipos = { "TABLE" };
-		ResultSet tables = dbmd.getTables("main", "PUBLIC", null, tipos);
-		ResultSet foreingKeys;
+		Short update, delete;
+		ResultSet tables, foreingKeys;
+		String tableName = null;
+		String fkColumnName = null, pkColumnName, pkTableName;
 
-		String fkColumnName, pkColumnName, pkTableName;
-		while (tables.next()) {
-			String tableName = tables.getString("TABLE_NAME");
-			foreingKeys = dbmd.getImportedKeys(null, null, tableName);
+		try {
+			tables = dbmd.getTables(null, "PUBLIC", null, tipos);
 
-			while (foreingKeys.next()) {
-				fkColumnName = foreingKeys.getString("FKCOLUMN_NAME");
-				pkColumnName = foreingKeys.getString("PKCOLUMN_NAME");
-				pkTableName = foreingKeys.getString("PKTABLE_NAME");
-				update = foreingKeys.getShort("UPDATE_RULE");
-				delete = foreingKeys.getShort("DELETE_RULE");
-				// Comprobar constrain DEFERRABILITY
+			while (tables.next()) {
+				tableName = tables.getString("TABLE_NAME");
+				foreingKeys = dbmd.getImportedKeys(null, null, tableName);
 
+				while (foreingKeys.next()) {
+					fkColumnName = foreingKeys.getString("FKCOLUMN_NAME");
+					pkColumnName = foreingKeys.getString("PKCOLUMN_NAME");
+					pkTableName = foreingKeys.getString("PKTABLE_NAME");
+					update = foreingKeys.getShort("UPDATE_RULE");
+					delete = foreingKeys.getShort("DELETE_RULE");
+					// Comprobar constrain DEFERRABILITY
 
-				DBNuevaDAO.addSentencia(
-						sentenciaClaveAjena(update, delete, fkColumnName, pkColumnName, pkTableName, tableName));
+					DAONuevaDB.addSentencia(
+							sentenciaClaveAjena(update, delete, fkColumnName, pkColumnName, pkTableName, tableName));
 
+				}
+				foreingKeys.close();
 			}
-			foreingKeys.close();
+			tables.close();
+		} catch (SQLException e) {
+			throw new MigracionException(
+					"Error en la migración de la base de datos (" + tableName + "-" + fkColumnName + ")");
 		}
-		tables.close();
-	}
-	
-
-
-	/**
-	 * Crea la sentencia SQL para crear tabla obtenidos de los metadatos de la BD
-	 * indicada
-	 * 
-	 * @param dbmd   Databasemetadata - metadatos de una base de datos
-	 * @param nombre String - nombre de la tabla a crear
-	 * @throws SQLException
-	 */
-	private static String sentenciaTabla(DatabaseMetaData dbmd, String tabla) throws SQLException {
-		ResultSet columnas = dbmd.getColumns(null, "PUBLIC", tabla, null);
-		StringBuilder sb = new StringBuilder("create table " + tabla + "(");
-		String nombreCol, tipoCol, nula;
-
-		while (columnas.next()) {
-			nombreCol = columnas.getString("COLUMN_NAME");
-			
-			tipoCol = comprobarTipoColumna(columnas.getString("TYPE_NAME"));
-			nula = isNullable(columnas.getString("IS_NULLABLE"));
-			//String autoin = columnas.getString("IS_AUTOINCREMENT");
-
-			sb.append(nombreCol + " " + tipoCol + nula + ",");
-		}
-
-		sb.delete(sb.length() - 1, sb.length());
-		sb.append(");");
-		columnas.close();
-
-		return sb.toString();
 	}
 
 	/**
@@ -160,6 +172,7 @@ public class DAOExistenteDB {
 	 * 
 	 * @param claves
 	 * @param tableName
+	 * @throws MigracionException
 	 * @throws SQLException
 	 */
 	private static void sentenciaClavePrimaria(ArrayList<String> claves, String tableName) throws SQLException {
@@ -173,12 +186,13 @@ public class DAOExistenteDB {
 			for (int i = 1; i < claves.size(); i++) {
 				sbSentencia.append(", " + claves.get(i));
 			}
-
 			sbSentencia.append(")");
 		}
 
 		System.out.println(sbSentencia);
-		DBNuevaDAO.addSentencia(sbSentencia.toString());
+
+		DAONuevaDB.addSentencia(sbSentencia.toString());
+
 	}
 
 	/**
@@ -194,14 +208,14 @@ public class DAOExistenteDB {
 	 * @throws SQLException
 	 */
 	private static String sentenciaClaveAjena(Short update, Short delete, String fkColumnName, String pkColumnName,
-			String pkTableName, String tableName) throws SQLException {
+			String pkTableName, String tableName) {
 
 		String[] rol = { "CASCADE", "RESTRICT", "SET NULL", "NO ACTION", "SET DEFAULT" };
-		
+
 		String restriccion = "FK" + tableName + "_" + pkTableName;
-		StringBuilder sentencia = new StringBuilder("ALTER TABLE " + tableName + " ADD CONSTRAINT " + restriccion + " FOREIGN KEY (" + fkColumnName + ") REFERENCES "
-				+ pkTableName + "(" + pkColumnName + ")");
-		
+		StringBuilder sentencia = new StringBuilder("ALTER TABLE " + tableName + " ADD CONSTRAINT " + restriccion
+				+ " FOREIGN KEY (" + fkColumnName + ") REFERENCES " + pkTableName + "(" + pkColumnName + ")");
+
 		if (delete != -1)
 			sentencia.append(" ON DELETE " + rol[delete]);
 
@@ -209,7 +223,7 @@ public class DAOExistenteDB {
 			sentencia.append(" ON UPDATE " + rol[update]);
 
 		System.out.println(sentencia);
-		
+
 		return sentencia.toString();
 	}
 
