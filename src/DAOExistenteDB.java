@@ -4,11 +4,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 
-public class DBExisteDAO {
+public class DAOExistenteDB {
 	private static Connection conexion;
-	private static DBExisteDAO dao;
+	private static DAOExistenteDB dao;
 
-	private DBExisteDAO() throws SQLException {
+	private DAOExistenteDB() throws SQLException {
 	}
 
 	/**
@@ -18,10 +18,10 @@ public class DBExisteDAO {
 	 * @return DAO objeto
 	 * @throws SQLException
 	 */
-	public static DBExisteDAO getDao(String archivo) throws SQLException {
+	public static DAOExistenteDB getDao(String archivo) throws SQLException {
 
 		if (conexion == null)
-			dao = new DBExisteDAO();
+			dao = new DAOExistenteDB();
 
 		return dao;
 	}
@@ -30,13 +30,16 @@ public class DBExisteDAO {
 	 * Obtiene todos los metadatos de la BD y lo ejecuta en la otra base de datos
 	 * 
 	 * @param dbmd
+	 * @throws MigracionException 
 	 * @throws SQLException
 	 */
-	public static void migrar(DatabaseMetaData dbmd) throws SQLException {
+	public static void migrar(DatabaseMetaData dbmd) throws MigracionException {
 		// Setautocommit(false) no funciona
 		String strSentencia;
 		String tabla;
 		String[] tipos = { "TABLE" };
+		
+		try {
 		ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
 
 		// Bucle por tablas
@@ -53,6 +56,9 @@ public class DBExisteDAO {
 
 		resul.close();
 		migrarClavesAjenas(dbmd);
+		} catch (SQLException e) {
+			throw new MigracionException("Error en la migración de la base de datos.");
+		}
 
 	}
 
@@ -106,7 +112,7 @@ public class DBExisteDAO {
 				update = foreingKeys.getShort("UPDATE_RULE");
 				delete = foreingKeys.getShort("DELETE_RULE");
 				// Comprobar constrain DEFERRABILITY
-				// System.out.println(foreingKeys.getShort("DEFERRABILITY"));
+
 
 				DBNuevaDAO.addSentencia(
 						sentenciaClaveAjena(update, delete, fkColumnName, pkColumnName, pkTableName, tableName));
@@ -116,6 +122,8 @@ public class DBExisteDAO {
 		}
 		tables.close();
 	}
+	
+
 
 	/**
 	 * Crea la sentencia SQL para crear tabla obtenidos de los metadatos de la BD
@@ -132,9 +140,10 @@ public class DBExisteDAO {
 
 		while (columnas.next()) {
 			nombreCol = columnas.getString("COLUMN_NAME");
+			
 			tipoCol = comprobarTipoColumna(columnas.getString("TYPE_NAME"));
 			nula = isNullable(columnas.getString("IS_NULLABLE"));
-			// String autoin = columnas.getString("IS_AUTOINCREMENT");
+			//String autoin = columnas.getString("IS_AUTOINCREMENT");
 
 			sb.append(nombreCol + " " + tipoCol + nula + ",");
 		}
@@ -188,11 +197,11 @@ public class DBExisteDAO {
 			String pkTableName, String tableName) throws SQLException {
 
 		String[] rol = { "CASCADE", "RESTRICT", "SET NULL", "NO ACTION", "SET DEFAULT" };
-		StringBuilder sentencia = new StringBuilder();
-
-		sentencia.append("ALTER TABLE " + tableName + " ADD FOREIGN KEY (" + fkColumnName + ") REFERENCES "
+		
+		String restriccion = "FK" + tableName + "_" + pkTableName;
+		StringBuilder sentencia = new StringBuilder("ALTER TABLE " + tableName + " ADD CONSTRAINT " + restriccion + " FOREIGN KEY (" + fkColumnName + ") REFERENCES "
 				+ pkTableName + "(" + pkColumnName + ")");
-
+		
 		if (delete != -1)
 			sentencia.append(" ON DELETE " + rol[delete]);
 
@@ -200,8 +209,7 @@ public class DBExisteDAO {
 			sentencia.append(" ON UPDATE " + rol[update]);
 
 		System.out.println(sentencia);
-		DBNuevaDAO.addSentencia(sentencia.toString());
-
+		
 		return sentencia.toString();
 	}
 

@@ -1,4 +1,3 @@
-import java.sql.SQLException;
 import java.util.Scanner;
 
 public class Principal {
@@ -19,7 +18,7 @@ public class Principal {
 //			nombreDBNueva = teclado.nextLine();
 
 //			String url = "oracle-sample.db";
-			String url = "chinook.db";
+			String url = "ciclistas";
 			consultarMetaData(url);
 
 		} catch (ClassNotFoundException e) {
@@ -31,17 +30,18 @@ public class Principal {
 
 	private static void consultarMetaData(String url) {
 		try {
+			ConexionDB.getConection(url);	//Crea la conexion
 			ConexionDBNueva.crearConexion("nueva5");
-			DBExisteDAO.migrar(ConexionDB.getConection(url).getMetaData());
-			ConexionDBNueva.getConnection().commit();
-
-		} catch (SQLException e) {
-			e.printStackTrace();
+			DAOExistenteDB.migrar(ConexionDB.getMetadatos());
+			ConexionDBNueva.realizarCommit();
+		} catch (MigracionException e) {
+			System.out.println(e.getMessage());
 			ConexionDBNueva.realizarRollBack();
-		} finally {
-			ConexionDBNueva.cerrarConexion();
-			ConexionDB.cerrarConexion();
-		}
+		} 
+
+		ConexionDBNueva.cerrarConexion();
+		ConexionDB.cerrarConexion();
+
 	}
 
 }
