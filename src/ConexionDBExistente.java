@@ -10,11 +10,12 @@ public class ConexionDBExistente {
 	private static String nombreDB;
 	
 	
-	private ConexionDBExistente(String url) throws MigracionException{
-		
+	
+	private ConexionDBExistente(String archivo) throws MigracionException{
+		String url = URL + archivo;
 		try {
 			conexion = DriverManager.getConnection(url);
-			nombreDB = url;
+			nombreDB = archivo;
 		} catch (SQLException e) {
 			throw new MigracionException("Error. No se ha podido conectar a la base de datos " + url);
 		}
@@ -28,9 +29,12 @@ public class ConexionDBExistente {
 	 * @throws SQLException
 	 */
 	public static Connection getConection(String archivo) throws MigracionException{
-		String strUrl = URL + archivo;
+		
 		if (!hayConexion()) 
-			new ConexionDBExistente(strUrl);
+			new ConexionDBExistente(archivo);
+		else if (!archivo.equalsIgnoreCase(nombreDB))
+			System.out.println("Has introducido la base de datos incorrecta. Te devuelvo " + nombreDB);
+		
 		
 		return conexion;
 	}

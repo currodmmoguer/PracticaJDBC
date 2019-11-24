@@ -22,6 +22,7 @@ public class ConexionDBNueva {
 	 */
 	private ConexionDBNueva(String nombre) throws MigracionException {
 
+		//Se utiliza 2 try/catch para mostrar 2 mensajes distintos
 		try {
 			conexion = DriverManager.getConnection(DB_URL, USER, PASS);
 			conexion.setAutoCommit(false);
