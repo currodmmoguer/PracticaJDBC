@@ -17,8 +17,8 @@ public class Principal {
 //			System.out.print("Introduce el nombre de la base de datos nueva: ");
 //			nombreDBNueva = teclado.nextLine();
 
-			String url = "ciclistas";
-//			String url = "prueba";
+			String url = "oracle-sample.db";
+//			String url = "ciclistas";
 			consultarMetaData(url);
 
 		} catch (ClassNotFoundException e) {
@@ -32,7 +32,7 @@ public class Principal {
 		DAOExistenteDB daoSqlite;
 		try {
 			ConexionDBExistente.getConection(url);	//Crea la conexion
-			ConexionDBNueva.crearConexion("nueva4");
+			ConexionDBNueva.crearConexion("nueva6");
 			daoSqlite = DAOExistenteDB.getDao(url);
 			daoSqlite.migrar(ConexionDBExistente.getMetadatos());
 			ConexionDBNueva.realizarCommit();

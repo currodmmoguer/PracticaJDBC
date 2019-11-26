@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Date;
 
 public class DAOExistenteDB {
 	private static Connection conexion;
@@ -51,8 +52,9 @@ public class DAOExistenteDB {
 				// Se compruena que no sea una tabla propia de sqlite
 				if (!tabla.startsWith("sqlite")) {
 					listaTipoColumnas = migrarTabla(dbmd, tabla);
-					migrarClavesPrimarias(dbmd, tabla);
+
 					migrarDatos(dbmd, tabla, listaTipoColumnas);
+					migrarClavesPrimarias(dbmd, tabla);
 				}
 			}
 
@@ -76,24 +78,31 @@ public class DAOExistenteDB {
 
 		while (resultQuery.next()) {
 			sbSentenciaInsert.append("INSERT INTO " + tabla + " VALUES (");
+			System.out.println(listaTipoColumnas.size());
 
 			while (contadorColumna <= listaTipoColumnas.size()) {
 
-				if (listaTipoColumnas.get(contadorColumna-1).getClass() == String.class) {
-					sbSentenciaInsert.append("'" + resultQuery.getObject(contadorColumna) + "',");
+				if (resultQuery.getObject(contadorColumna) == null) {
+					sbSentenciaInsert.append("null,");
+				} else if (listaTipoColumnas.get(contadorColumna - 1).getClass() == String.class
+						|| listaTipoColumnas.get(contadorColumna - 1).getClass() == Date.class) {
+
+					if (resultQuery.getObject(contadorColumna).toString().indexOf("\"") == -1) {
+						sbSentenciaInsert.append("\"" + resultQuery.getObject(contadorColumna) + "\",");
+					} else {
+						sbSentenciaInsert.append("'" + resultQuery.getObject(contadorColumna) + "',");
+					}
+
 				} else {
 					sbSentenciaInsert.append(resultQuery.getObject(contadorColumna) + ",");
 				}
-
 				contadorColumna++;
 			}
-
+			// Cierra la sentencia
 			sbSentenciaInsert.deleteCharAt(sbSentenciaInsert.length() - 1);
 			sbSentenciaInsert.append(")");
 
-			System.out.println(sbSentenciaInsert);
-
-			sencenciaInsert.executeUpdate(sbSentenciaInsert.toString());
+			DAONuevaDB.addSentencia(sbSentenciaInsert.toString());
 
 			contadorColumna = 1;
 			sbSentenciaInsert.delete(0, sbSentenciaInsert.length());
@@ -130,7 +139,6 @@ public class DAOExistenteDB {
 			sbSentencia.append(");");
 			columnas.close();
 
-			System.out.println(sbSentencia.toString());
 			DAONuevaDB.addSentencia(sbSentencia.toString());
 		} catch (SQLException e) {
 			throw new MigracionException("Error en la migración de la base de datos con la tabla \"" + tabla + "\"");
@@ -141,10 +149,20 @@ public class DAOExistenteDB {
 
 	private static void comprobarDato(String data, ArrayList<Object> list) {
 
+		// Comprueba solo los datos que hay que introducirlos entre comilla, los demas
+		// pone un 0 simplemente
+		// porque si se pusiera null al hacerle el .getClass() saldría
+		// NullPointerException
 		if (data.toUpperCase().startsWith("VARCHAR")) {
-			list.add("");
+			list.add(new String());
+
 		} else {
-			list.add(0);
+			if (data.toUpperCase().startsWith("DATE")) {
+				list.add(new Date());
+			} else {
+				list.add(0);
+			}
+
 		}
 
 	}
