@@ -6,6 +6,8 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Date;
 
+import com.mysql.jdbc.PreparedStatement;
+
 public class DAOExistenteDB {
 	private static Connection conexion;
 	private static DAOExistenteDB dao;
@@ -40,8 +42,7 @@ public class DAOExistenteDB {
 		// Setautocommit(false) no funciona
 		String tabla;
 		String[] tipos = { "TABLE" };
-		int numeroColumnas;
-		ArrayList<Object> listaTipoColumnas;
+		ArrayList<Object> listaTipoColumnas;	//Este arrayList se utiliza para cuando se inserte los valores, saber de que tipo es
 
 		try {
 			ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
@@ -49,17 +50,16 @@ public class DAOExistenteDB {
 			// Bucle por tablas (no migra las claves ajenas)
 			while (resul.next()) {
 				tabla = resul.getString("TABLE_NAME");
-				// Se compruena que no sea una tabla propia de sqlite
-				if (!tabla.startsWith("sqlite")) {
+				
+				if (!tabla.startsWith("sqlite")) {	// Se compruena que no sea una tabla propia de sqlite
 					listaTipoColumnas = migrarTabla(dbmd, tabla);
-
 					migrarDatos(dbmd, tabla, listaTipoColumnas);
 					migrarClavesPrimarias(dbmd, tabla);
 				}
 			}
 
 			resul.close();
-			migrarClavesAjenas(dbmd);
+			migrarClavesAjenas(dbmd, tipos);
 		} catch (SQLException e) {
 			e.printStackTrace();
 			throw new MigracionException("Error en la migración de la base de datos.");
@@ -67,48 +67,7 @@ public class DAOExistenteDB {
 
 	}
 
-	private static void migrarDatos(DatabaseMetaData dbmd, String tabla, ArrayList<Object> listaTipoColumnas)
-			throws SQLException {
-		StringBuilder sbSentenciaInsert = new StringBuilder();
-		String strSentenciaQuery = "SELECT * FROM " + tabla;
-		Statement sentenciaQuery = conexion.createStatement();
-		Statement sencenciaInsert = conexion.createStatement();
-		ResultSet resultQuery = sentenciaQuery.executeQuery(strSentenciaQuery);
-		int contadorColumna = 1;
-
-		while (resultQuery.next()) {
-			sbSentenciaInsert.append("INSERT INTO " + tabla + " VALUES (");
-			System.out.println(listaTipoColumnas.size());
-
-			while (contadorColumna <= listaTipoColumnas.size()) {
-
-				if (resultQuery.getObject(contadorColumna) == null) {
-					sbSentenciaInsert.append("null,");
-				} else if (listaTipoColumnas.get(contadorColumna - 1).getClass() == String.class
-						|| listaTipoColumnas.get(contadorColumna - 1).getClass() == Date.class) {
-
-					if (resultQuery.getObject(contadorColumna).toString().indexOf("\"") == -1) {
-						sbSentenciaInsert.append("\"" + resultQuery.getObject(contadorColumna) + "\",");
-					} else {
-						sbSentenciaInsert.append("'" + resultQuery.getObject(contadorColumna) + "',");
-					}
-
-				} else {
-					sbSentenciaInsert.append(resultQuery.getObject(contadorColumna) + ",");
-				}
-				contadorColumna++;
-			}
-			// Cierra la sentencia
-			sbSentenciaInsert.deleteCharAt(sbSentenciaInsert.length() - 1);
-			sbSentenciaInsert.append(")");
-
-			DAONuevaDB.addSentencia(sbSentenciaInsert.toString());
-
-			contadorColumna = 1;
-			sbSentenciaInsert.delete(0, sbSentenciaInsert.length());
-		}
-
-	}
+	
 
 	/**
 	 * Crea la sentencia SQL y la ejecuta para crear tabla obtenidos de los
@@ -130,42 +89,73 @@ public class DAOExistenteDB {
 				nombreCol = columnas.getString("COLUMN_NAME");
 				tipoCol = comprobarTipoColumna(columnas.getString("TYPE_NAME"));
 				nula = isNullable(columnas.getString("IS_NULLABLE"));
-				// String autoin = columnas.getString("IS_AUTOINCREMENT");
-				comprobarDato(tipoCol, tipoColumnas);
+				
 				sbSentencia.append(nombreCol + " " + tipoCol + nula + ",");
+				comprobarTipoColumna(tipoCol, tipoColumnas);
 			}
 
 			sbSentencia.delete(sbSentencia.length() - 1, sbSentencia.length());
 			sbSentencia.append(");");
 			columnas.close();
 
-			DAONuevaDB.addSentencia(sbSentencia.toString());
+			DAONuevaDB.ejecutarSentencia(sbSentencia.toString());
 		} catch (SQLException e) {
 			throw new MigracionException("Error en la migración de la base de datos con la tabla \"" + tabla + "\"");
 		}
 
 		return tipoColumnas;
 	}
+	
+	/**
+	 * Migra los datos de la tabla indicada
+	 * @param dbmd
+	 * @param tabla
+	 * @param listaTipoColumnas
+	 * @throws SQLException
+	 */
+	private static void migrarDatos(DatabaseMetaData dbmd, String tabla, ArrayList<Object> listaTipoColumnas)
+			throws SQLException {
+		StringBuilder sbSentenciaInsert = new StringBuilder();
+		String strSentenciaQuery = "SELECT * FROM " + tabla;
+		Statement sentenciaQuery = conexion.createStatement();
+		ResultSet resultQuery = sentenciaQuery.executeQuery(strSentenciaQuery);
+		int contadorColumna = 1;
 
-	private static void comprobarDato(String data, ArrayList<Object> list) {
+		while (resultQuery.next()) {
+			sbSentenciaInsert.append("INSERT INTO " + tabla + " VALUES (");
+			System.out.println(listaTipoColumnas.size());
 
-		// Comprueba solo los datos que hay que introducirlos entre comilla, los demas
-		// pone un 0 simplemente
-		// porque si se pusiera null al hacerle el .getClass() saldría
-		// NullPointerException
-		if (data.toUpperCase().startsWith("VARCHAR")) {
-			list.add(new String());
+			while (contadorColumna <= listaTipoColumnas.size()) {
 
-		} else {
-			if (data.toUpperCase().startsWith("DATE")) {
-				list.add(new Date());
-			} else {
-				list.add(0);
+				if (resultQuery.getObject(contadorColumna) == null) {
+					sbSentenciaInsert.append("null,");
+				} else if (listaTipoColumnas.get(contadorColumna - 1).getClass() == String.class
+						|| listaTipoColumnas.get(contadorColumna - 1).getClass() == Date.class) {
+
+					if (resultQuery.getObject(contadorColumna).toString().indexOf("\"") == -1) {	//Si no contiene doble comillas, se introduce con doble comillas
+						sbSentenciaInsert.append("\"" + resultQuery.getObject(contadorColumna) + "\",");
+					} else { //En el caso de que si tenga, el VARCHAR o DATE se introduce entre comillas simples
+						sbSentenciaInsert.append("'" + resultQuery.getObject(contadorColumna) + "',");
+					}
+
+				} else { //En el caso que no sea ni VARCHAR/DATE los introduce sin comillas
+					sbSentenciaInsert.append(resultQuery.getObject(contadorColumna) + ",");
+				}
+				contadorColumna++;
 			}
+			// Cierra la sentencia
+			sbSentenciaInsert.deleteCharAt(sbSentenciaInsert.length() - 1);
+			sbSentenciaInsert.append(")");
 
+			DAONuevaDB.ejecutarSentencia(sbSentenciaInsert.toString());
+
+			contadorColumna = 1;
+			sbSentenciaInsert.delete(0, sbSentenciaInsert.length());
 		}
 
 	}
+
+
 
 	/**
 	 * Consulta las claves primarias y prepara la sentencia en MySQL
@@ -205,8 +195,7 @@ public class DAOExistenteDB {
 	 * @throws MigracionException
 	 * @throws SQLException
 	 */
-	private static void migrarClavesAjenas(DatabaseMetaData dbmd) throws MigracionException {
-		String[] tipos = { "TABLE" };
+	private static void migrarClavesAjenas(DatabaseMetaData dbmd, String[] tipos) throws MigracionException {
 		Short update, delete;
 		ResultSet tables, foreingKeys;
 		String tableName = null;
@@ -225,9 +214,8 @@ public class DAOExistenteDB {
 					pkTableName = foreingKeys.getString("PKTABLE_NAME");
 					update = foreingKeys.getShort("UPDATE_RULE");
 					delete = foreingKeys.getShort("DELETE_RULE");
-					// Comprobar constrain DEFERRABILITY
 
-					DAONuevaDB.addSentencia(
+					DAONuevaDB.ejecutarSentencia(
 							sentenciaClaveAjena(update, delete, fkColumnName, pkColumnName, pkTableName, tableName));
 
 				}
@@ -235,6 +223,7 @@ public class DAOExistenteDB {
 			}
 			tables.close();
 		} catch (SQLException e) {
+			e.printStackTrace();
 			throw new MigracionException(
 					"Error en la migración de la base de datos (" + tableName + "-" + fkColumnName + ")");
 		}
@@ -264,7 +253,7 @@ public class DAOExistenteDB {
 
 		System.out.println(sbSentencia);
 
-		DAONuevaDB.addSentencia(sbSentencia.toString());
+		DAONuevaDB.ejecutarSentencia(sbSentencia.toString());
 
 	}
 
@@ -299,6 +288,27 @@ public class DAOExistenteDB {
 
 		return sentencia.toString();
 	}
+	
+	/**
+	 * Añade en un arrayList el tipo de dato que es solo si es String o Date porque en la sentencia sql debe ir entre comillas.
+	 * En el caso que no lo sea se pone 0
+	 * @param data
+	 * @param list
+	 */
+	private static void comprobarTipoColumna(String data, ArrayList<Object> list) {
+
+		// si se pusiera null, al hacerle el .getClass() saldría NullPointerException
+		if (data.toUpperCase().startsWith("VARCHAR")) {
+			list.add(new String());
+
+		} else {
+			if (data.toUpperCase().startsWith("DATE")) {
+				list.add(new Date());
+			} else {
+				list.add(0);
+			}
+		}
+	}
 
 	/**
 	 * Comprueba tipos de datos y realiza la conversión a su equivalencia en MySQL
@@ -308,12 +318,12 @@ public class DAOExistenteDB {
 	 */
 	private static String comprobarTipoColumna(String tipoCol) {
 		String numero, nombre = tipoCol;
-		if (tipoCol.toUpperCase().startsWith("NVARCHAR") || tipoCol.startsWith("VARACHAR")
-				|| tipoCol.toUpperCase().startsWith("VARCHAR2")) {
+		
+		if (tipoCol.toUpperCase().startsWith("NVARCHAR") || tipoCol.toUpperCase().startsWith("VARCHAR2")) {
 			numero = tipoCol.substring(tipoCol.indexOf("("), tipoCol.indexOf(")"));
 			nombre = "VARCHAR" + numero + ")";
 		}
-
+		
 		if (tipoCol.toUpperCase().startsWith("NUMBER")) {
 			numero = tipoCol.substring(tipoCol.indexOf("("), tipoCol.indexOf(")"));
 			nombre = "DECIMAL" + numero + ")";
