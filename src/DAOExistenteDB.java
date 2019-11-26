@@ -2,13 +2,15 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 
 public class DAOExistenteDB {
 	private static Connection conexion;
 	private static DAOExistenteDB dao;
 
-	private DAOExistenteDB() throws SQLException {
+	private DAOExistenteDB(String archivo) throws MigracionException {
+		conexion = ConexionDBExistente.getConection(archivo);
 	}
 
 	/**
@@ -16,12 +18,12 @@ public class DAOExistenteDB {
 	 * 
 	 * @param archivo
 	 * @return DAO objeto
-	 * @throws SQLException
+	 * @throws MigracionException
 	 */
-	public static DAOExistenteDB getDao(String archivo) throws SQLException {
+	public static DAOExistenteDB getDao(String archivo) throws MigracionException {
 
 		if (conexion == null)
-			dao = new DAOExistenteDB();
+			dao = new DAOExistenteDB(archivo);
 
 		return dao;
 	}
@@ -37,6 +39,8 @@ public class DAOExistenteDB {
 		// Setautocommit(false) no funciona
 		String tabla;
 		String[] tipos = { "TABLE" };
+		int numeroColumnas;
+		ArrayList<Object> listaTipoColumnas;
 
 		try {
 			ResultSet resul = dbmd.getTables(null, "PUBLIC", null, tipos);
@@ -46,15 +50,53 @@ public class DAOExistenteDB {
 				tabla = resul.getString("TABLE_NAME");
 				// Se compruena que no sea una tabla propia de sqlite
 				if (!tabla.startsWith("sqlite")) {
-					migrarTabla(dbmd, tabla);
+					listaTipoColumnas = migrarTabla(dbmd, tabla);
 					migrarClavesPrimarias(dbmd, tabla);
+					migrarDatos(dbmd, tabla, listaTipoColumnas);
 				}
 			}
 
 			resul.close();
 			migrarClavesAjenas(dbmd);
 		} catch (SQLException e) {
+			e.printStackTrace();
 			throw new MigracionException("Error en la migración de la base de datos.");
+		}
+
+	}
+
+	private static void migrarDatos(DatabaseMetaData dbmd, String tabla, ArrayList<Object> listaTipoColumnas)
+			throws SQLException {
+		StringBuilder sbSentenciaInsert = new StringBuilder();
+		String strSentenciaQuery = "SELECT * FROM " + tabla;
+		Statement sentenciaQuery = conexion.createStatement();
+		Statement sencenciaInsert = conexion.createStatement();
+		ResultSet resultQuery = sentenciaQuery.executeQuery(strSentenciaQuery);
+		int contadorColumna = 1;
+
+		while (resultQuery.next()) {
+			sbSentenciaInsert.append("INSERT INTO " + tabla + " VALUES (");
+
+			while (contadorColumna <= listaTipoColumnas.size()) {
+
+				if (listaTipoColumnas.get(contadorColumna-1).getClass() == String.class) {
+					sbSentenciaInsert.append("'" + resultQuery.getObject(contadorColumna) + "',");
+				} else {
+					sbSentenciaInsert.append(resultQuery.getObject(contadorColumna) + ",");
+				}
+
+				contadorColumna++;
+			}
+
+			sbSentenciaInsert.deleteCharAt(sbSentenciaInsert.length() - 1);
+			sbSentenciaInsert.append(")");
+
+			System.out.println(sbSentenciaInsert);
+
+			sencenciaInsert.executeUpdate(sbSentenciaInsert.toString());
+
+			contadorColumna = 1;
+			sbSentenciaInsert.delete(0, sbSentenciaInsert.length());
 		}
 
 	}
@@ -67,9 +109,10 @@ public class DAOExistenteDB {
 	 * @param nombre String - nombre de la tabla a crear
 	 * @throws MigracionException
 	 */
-	private static void migrarTabla(DatabaseMetaData dbmd, String tabla) throws MigracionException {
+	private static ArrayList<Object> migrarTabla(DatabaseMetaData dbmd, String tabla) throws MigracionException {
 		StringBuilder sbSentencia = new StringBuilder("create table " + tabla + "(");
 		String nombreCol, tipoCol, nula;
+		ArrayList<Object> tipoColumnas = new ArrayList<Object>();
 
 		try {
 			ResultSet columnas = dbmd.getColumns(null, "PUBLIC", tabla, null);
@@ -79,7 +122,7 @@ public class DAOExistenteDB {
 				tipoCol = comprobarTipoColumna(columnas.getString("TYPE_NAME"));
 				nula = isNullable(columnas.getString("IS_NULLABLE"));
 				// String autoin = columnas.getString("IS_AUTOINCREMENT");
-
+				comprobarDato(tipoCol, tipoColumnas);
 				sbSentencia.append(nombreCol + " " + tipoCol + nula + ",");
 			}
 
@@ -92,6 +135,18 @@ public class DAOExistenteDB {
 		} catch (SQLException e) {
 			throw new MigracionException("Error en la migración de la base de datos con la tabla \"" + tabla + "\"");
 		}
+
+		return tipoColumnas;
+	}
+
+	private static void comprobarDato(String data, ArrayList<Object> list) {
+
+		if (data.toUpperCase().startsWith("VARCHAR")) {
+			list.add("");
+		} else {
+			list.add(0);
+		}
+
 	}
 
 	/**
