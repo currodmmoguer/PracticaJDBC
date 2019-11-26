@@ -39,6 +39,11 @@ public class ConexionDBExistente {
 		return conexion;
 	}
 	
+	/**
+	 * Obtiene los metadatos
+	 * @return
+	 * @throws MigracionException
+	 */
 	public static DatabaseMetaData getMetadatos() throws MigracionException {
 		DatabaseMetaData dbmd = null;
 		

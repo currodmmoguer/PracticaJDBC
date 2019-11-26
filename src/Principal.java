@@ -11,15 +11,12 @@ public class Principal {
 
 			Class.forName(DRIVER);
 
-			// Bucle que cuando la haga pregunte si hacer otra o salir
-//			System.out.print("Introduce el nombre del archivo de la base de datos que quieres migrar: ");
-//			nombreFicheroExiste = teclado.nextLine();
-//			System.out.print("Introduce el nombre de la base de datos nueva: ");
-//			nombreDBNueva = teclado.nextLine();
+			System.out.print("Introduce el nombre del archivo de la base de datos que quieres migrar: ");
+			nombreFicheroExiste = teclado.nextLine();
+			System.out.print("Introduce el nombre de la base de datos nueva: ");
+			nombreDBNueva = teclado.nextLine();
 
-//			String url = "chinook.db";
-			String url = "ciclistas";
-			consultarMetaData(url);
+			consultarMetaData(nombreFicheroExiste, nombreDBNueva);
 
 		} catch (ClassNotFoundException e) {
 			// TODO Auto-generated catch block
@@ -28,13 +25,14 @@ public class Principal {
 
 	}
 
-	private static void consultarMetaData(String url) {
+	private static void consultarMetaData(String dbExistente, String dbNueva) {
 		DAOExistenteDB daoSqlite;
 		try {
-			ConexionDBNueva.crearConexion("nueva5");
-			daoSqlite = DAOExistenteDB.getDao(url);
+			ConexionDBNueva.crearConexion(dbNueva);
+			daoSqlite = DAOExistenteDB.getDao(dbExistente);
 			daoSqlite.migrar(ConexionDBExistente.getMetadatos());
 			ConexionDBNueva.realizarCommit();
+			System.out.println("Se ha realizado la migración de la base de datos \"" + dbExistente + "\", ahora se llama \"" + dbNueva + "\" en MySQL");
 			
 		} catch (MigracionException e) {
 			System.err.println(e.getMessage());

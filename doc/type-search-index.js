@@ -1,0 +1,1 @@
+typeSearchIndex = [{"l":"All Classes","url":"allclasses-index.html"},{"p":"<Unnamed>","l":"ConexionDBExistente"},{"p":"<Unnamed>","l":"ConexionDBNueva"},{"p":"<Unnamed>","l":"DAOExistenteDB"},{"p":"<Unnamed>","l":"DAONuevaDB"},{"p":"<Unnamed>","l":"MigracionException"},{"p":"<Unnamed>","l":"Principal"}]

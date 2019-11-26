@@ -25,7 +25,6 @@ public class DAONuevaDB {
 	 * @throws SQLException
 	 */
 	public static void ejecutarSentencia(String sentencia) throws SQLException {
-		System.out.println(sentencia);
 		Statement sent = ConexionDBNueva.getConnection().createStatement();
 		sent.executeUpdate(sentencia);
 		sent.close();

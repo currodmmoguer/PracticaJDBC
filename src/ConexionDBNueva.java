@@ -76,6 +76,9 @@ public class ConexionDBNueva {
 			}
 	}
 	
+	/**
+	 * Realiza commit en la base de datos
+	 */
 	public static void realizarCommit() {
 		if (conexion != null) {
 			try {
@@ -86,6 +89,9 @@ public class ConexionDBNueva {
 		}
 	}
 
+	/**
+	 * Realiza rollback en la base de datos
+	 */
 	public static void realizarRollBack() {
 		if (conexion != null) {
 			try {
